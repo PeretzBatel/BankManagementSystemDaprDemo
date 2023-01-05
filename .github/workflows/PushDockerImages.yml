@@ -1,11 +1,11 @@
-name: Build & publish docker images
-on:
+ name: Push Docker Images to ACR 
+ on:
   workflow_dispatch:
-  workflow_call:
-  release:
+   workflow_call:
+   release:
     types: [published]
 
-jobs:
+ jobs:
   build-and-push-image:
     runs-on: ubuntu-latest
     environment: test
@@ -13,54 +13,48 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - dockerfile: ./Managers/BMSD.Managers.Account/Dockerfile
-            image: bmsd.managers.account
-            application_name: accountmanager
-          - dockerfile: ./Managers/BMSD.Managers.Notification/Dockerfile
-            image: bmsd.managers.notification
-            application_name: notificationmanager
-          - dockerfile: ./Accessors/BMSD.Accessors.CheckingAccount/Dockerfile
-            image: bmsd.accessors.checkingaccount
-            application_name: checkingaccountaccessor
-          - dockerfile: ./Accessors/BMSD.Accessors.UserInfo/Dockerfile
-            image: bmsd.accessors.userinfo
-            application_name: userinfoaccessor
-          - dockerfile: ./Engines/BMSD.Engines.LiabilityValidator/Dockerfile
-            image: bmsd.engines.liabilityvalidator
-            application_name: liabilityvalidatorengine
+          - dockerfile: 
+            image: ${DOCKER_REGISTRY-}gallerubackendmanagerusers
+            application_name: managerusers
+          - dockerfile: ./backend/GallerUBackEnd/Accessors/GallerU.Backend.Accessor.Users/Dockerfile
+            image: ${DOCKER_REGISTRY-}gallerubackendaccessorusers
+            application_name: gallerubackendaccessorevent
+          - dockerfile: ./backend/GallerUBackEnd/Accessors/GallerU.Backend.Accessor.Event/Dockerfile
+            image: ${DOCKER_REGISTRY-}gallerubackendaccessorevent
+            application_name: gallerubackendmanagerevent
+          - dockerfile: ./backend/GallerUBackEnd/Managers/GallerU.Backend.Manager.Event/Dockerfile
+            image: ${DOCKER_REGISTRY-}gallerubackendaccessoruserevent
+            application_name: accessoruserevent
+          - dockerfile: Accessors/GallerU.Backend.Accessor.UserEvent/Dockerfile
+            image:  ${DOCKER_REGISTRY-}gallerubackendaccessoeventtemplatecatalog
+            application_name: accessoeventtemplatecatalog
+          - dockerfile: ./backend/GallerUBackEnd/Accessors/GallerU.Backend.Accessor.EventTemplateCatalog/Dockerfile
+            image: ${DOCKER_REGISTRY-}gallerubackendmanagersnotification
+            application_name: accessoruserevent
+          - dockerfile: ./backend/GallerUBackEnd/Managers/GallerU.Backend.Managers.Notification/Dockerfile
+
+           
     permissions:
       contents: read
       packages: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - uses: azure/docker-login@v1
-        with:
-          login-server: bmsdcr.azurecr.io
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
-        with:
-          images: bmsdcr.azurecr.io/${{ matrix.image }}
-      - name: Build and push Docker images
-        uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-      - name: Update containers app revision
-        uses: azure/CLI@v1
-        with:
-          azcliversion: 2.30.0
-          inlineScript: |
-            az config set extension.use_dynamic_install=yes_without_prompt
-            az containerapp update --name ${{ matrix.application_name }} --resource-group bmsd-cont-app-rg --image bmsdcr.azurecr.io/${{ matrix.image }}:${GITHUB_REF#refs/heads/}
+    # Install Docker
+    - run: |
+        sudo apt-get update
+        sudo apt-get install -y docker.io
+        echo "Docker installed successfully."
+    # Login to Azure Container Registry
+    - run: |
+        az acr login --name [galleruacr]
+        echo "Logged in to Azure Container Registry."
+           # Build and push all Docker images
+    - run: |
+        docker images | awk '/^[^<none>]/ {print $1":"$2}' | \
+        while read -r line; do
+          imageName=${line%:*}
+          imageTag=${line#*:}
+          docker tag $imageName [acr_name].azurecr.io/$imageName:$imageTag
+          docker push [acr_name].azurecr.io/$imageName:$imageTag
+        done
+        echo "All images pushed to Azure Container Registry."
